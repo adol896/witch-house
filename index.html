@@ -190,13 +190,16 @@
           updateUI();
       }
 
-      // NFC読み込み＆一括自動処理（読込・投入・反映）
+      // NFCから読み込んだ達成時間をもとにガチャを回し、カード側を0にリセットして書き戻す
       let isGachaRunning = false;
-      function processNfcData() {
-          if (isGachaRunning) return;
+      async function processNfcData(achievedTime) {
+          if (isGachaRunning || achievedTime <= 0) {
+              if (achievedTime <= 0) alert("このカードには有効な達成時間がありません。");
+              return;
+          }
           isGachaRunning = true;
 
-          catalystTime = 60; // 読み込みにより60分分を即時投入
+          catalystTime = achievedTime;
           updateUI();
 
           SE.toss();
@@ -206,14 +209,29 @@
 
           const selectedItem = gachaPool[Math.floor(Math.random() * gachaPool.length)];
 
-          setTimeout(() => {
+          setTimeout(async () => {
               showItemPopup(selectedItem);
 
+              // 達成時間（分）に応じて経験値を計算
               let expGained = spentTime * 2;
               if(selectedItem.rarity === 'SR') expGained = Math.floor(expGained * 1.5);
               if(selectedItem.rarity === 'SSR') expGained = expGained * 2;
 
               addExp(expGained);
+
+              // 【重要】カード側の時間を0にし、最新の playerLevel と exp をセットで書き戻す
+              if ('NDEFReader' in window) {
+                  try {
+                      const ndefWriter = new NDEFReader();
+                      const cardData = JSON.stringify({ time: 0, level: playerLevel, exp: playerExp });
+                      await ndefWriter.write({
+                          records: [{ recordType: "text", data: cardData }]
+                      });
+                  } catch (err) {
+                      console.log("NFC書き込みエラー:", err);
+                  }
+              }
+
               isGachaRunning = false;
           }, 2000);
       }
@@ -226,18 +244,31 @@
                   document.getElementById('start-overlay').style.display = 'none';
                   ndef.onreading = event => {
                       SE.scan();
-                      processNfcData();
+                      let readTime = 0;
+                      // カード内のJSONデータから「達成時間 (time)」を正確に取得する
+                      for (const record of event.message.records) {
+                          if (record.recordType === "text") {
+                              try {
+                                  const textDec = new TextDecoder().decode(record.data);
+                                  const parsed = JSON.parse(textDec);
+                                  if (parsed.time !== undefined) {
+                                      readTime = Number(parsed.time);
+                                  }
+                              } catch(e) {}
+                          }
+                      }
+                      processNfcData(readTime);
                   };
               } catch (error) {
                   alert("NFCリーダー起動失敗。スマホでNFCをONにしてください。");
               }
           } else {
               document.getElementById('start-overlay').style.display = 'none';
-              // PC用裏技：右下クリックでNFC仮想タッチ（一括自動処理）
+              // PC用裏技：右下クリックでNFC仮想タッチ（テスト用に60分として処理）
               window.addEventListener('click', (e) => {
                   if(e.clientX > window.innerWidth - 100 && e.clientY > window.innerHeight - 100) {
                       SE.scan();
-                      processNfcData();
+                      processNfcData(60);
                   }
               });
           }
