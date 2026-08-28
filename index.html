@@ -159,6 +159,7 @@
       let playerExp = parseInt(localStorage.getItem('zeldaPlayerExp') || '0');
       let expToNext = 100 * playerLevel;
       let catalystTime = 0;
+      let currentPayload = null; // 読み込んだNFCの全データを保持
 
       const gachaPool = [
           { name: "名もなき剣士の錆びた剣", rarity: "N", desc: "小量の魔力を得た" },
@@ -171,6 +172,13 @@
           document.getElementById('exp-display').innerText = `${playerExp} / ${expToNext}`;
           document.getElementById('exp-bar').style.width = `${Math.min(100, (playerExp / expToNext) * 100)}%`;
           document.getElementById('catalyst-display').innerText = catalystTime;
+          
+          const tossBtn = document.getElementById('toss-btn');
+          if (catalystTime > 0) {
+              tossBtn.removeAttribute('disabled');
+          } else {
+              tossBtn.setAttribute('disabled', 'true');
+          }
       }
 
       function saveState() {
@@ -190,17 +198,10 @@
           updateUI();
       }
 
-      // NFCから読み込んだ達成時間をもとにガチャを回し、カード側を0にリセットして書き戻す
-      let isGachaRunning = false;
-      async function processNfcData(achievedTime) {
-          if (isGachaRunning || achievedTime <= 0) {
-              if (achievedTime <= 0) alert("このカードには有効な達成時間がありません。");
-              return;
-          }
+      // 画面のボタンから大釜に投入したときの処理
+      async function tossCatalyst() {
+          if (isGachaRunning || catalystTime <= 0) return;
           isGachaRunning = true;
-
-          catalystTime = achievedTime;
-          updateUI();
 
           SE.toss();
           let spentTime = catalystTime;
@@ -212,20 +213,26 @@
           setTimeout(async () => {
               showItemPopup(selectedItem);
 
-              // 達成時間（分）に応じて経験値を計算
               let expGained = spentTime * 2;
               if(selectedItem.rarity === 'SR') expGained = Math.floor(expGained * 1.5);
               if(selectedItem.rarity === 'SSR') expGained = expGained * 2;
 
               addExp(expGained);
 
-              // 【重要】カード側の時間を0にし、最新の playerLevel と exp をセットで書き戻す
+              // データの書き戻し（「冒険の献立」の形式を維持しつつ、消費したゲーム時間を0にリセット）
               if ('NDEFReader' in window) {
                   try {
                       const ndefWriter = new NDEFReader();
-                      const cardData = JSON.stringify({ time: 0, level: playerLevel, exp: playerExp });
+                      let writeData;
+                      if (currentPayload && currentPayload.games) {
+                          currentPayload.games.forEach(g => g.totalMinutes = 0);
+                          currentPayload.level = playerLevel;
+                          writeData = currentPayload;
+                      } else {
+                          writeData = { games: [], level: playerLevel };
+                      }
                       await ndefWriter.write({
-                          records: [{ recordType: "text", data: cardData }]
+                          records: [{ recordType: "text", data: JSON.stringify(writeData) }]
                       });
                   } catch (err) {
                       console.log("NFC書き込みエラー:", err);
@@ -234,6 +241,18 @@
 
               isGachaRunning = false;
           }, 2000);
+      }
+
+      // NFCから読み込んだデータをもとに反映
+      let isGachaRunning = false;
+      function processNfcData(achievedTime, payload) {
+          if (achievedTime <= 0) {
+              alert("このカードには有効な達成時間がありません。");
+              return;
+          }
+          catalystTime = achievedTime;
+          currentPayload = payload;
+          updateUI();
       }
 
       async function initSystem() {
@@ -245,19 +264,26 @@
                   ndef.onreading = event => {
                       SE.scan();
                       let readTime = 0;
-                      // カード内のJSONデータから「達成時間 (time)」を正確に取得する
+                      let parsedPayload = null;
+                      
+                      // カード内のJSONデータから「冒険の献立」形式の達成時間（totalMinutesの合計）を正確に取得する
                       for (const record of event.message.records) {
                           if (record.recordType === "text") {
                               try {
                                   const textDec = new TextDecoder().decode(record.data);
                                   const parsed = JSON.parse(textDec);
+                                  parsedPayload = parsed;
+
                                   if (parsed.time !== undefined) {
                                       readTime = Number(parsed.time);
+                                  } else if (parsed.games && Array.isArray(parsed.games)) {
+                                      // 各ゲームの累計時間の合計を算出
+                                      readTime = parsed.games.reduce((sum, g) => sum + (g.totalMinutes || 0), 0);
                                   }
                               } catch(e) {}
                           }
                       }
-                      processNfcData(readTime);
+                      processNfcData(readTime, parsedPayload);
                   };
               } catch (error) {
                   alert("NFCリーダー起動失敗。スマホでNFCをONにしてください。");
@@ -268,7 +294,7 @@
               window.addEventListener('click', (e) => {
                   if(e.clientX > window.innerWidth - 100 && e.clientY > window.innerHeight - 100) {
                       SE.scan();
-                      processNfcData(60);
+                      processNfcData(60, { games: [{ title: "テストゲーム", totalMinutes: 60 }] });
                   }
               });
           }
