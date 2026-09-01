@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>魔女の大釜 3Dガチャ - 同期・引継ぎ完全版</title>
+    <title>魔女の大釜 3Dガチャ - 日別制限対応版</title>
     <style>
       body {
           margin: 0; overflow: hidden; background-color: #1a120b;
@@ -14,7 +14,7 @@
       }
       #canvas-container:active { cursor: grabbing; }
 
-      /* UIレイアウト（絶対配置で見切れを防止） */
+      /* UIレイアウト */
       #ui-layer {
           position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
           z-index: 10; pointer-events: none; box-sizing: border-box;
@@ -24,37 +24,41 @@
       .header-status {
           position: absolute; top: 20px; left: 20px;
           background: rgba(20, 15, 10, 0.9); padding: 12px 15px;
-          border: 1px solid #5a3d2b; border-radius: 5px; width: 240px;
+          border: 1px solid #5a3d2b; border-radius: 5px; width: 250px;
           pointer-events: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
       }
       .exp-bar-container {
           width: 100%; height: 8px; background: #222; margin-top: 5px; border-radius: 4px; overflow: hidden;
       }
       #exp-bar { width: 0%; height: 100%; background: #4caf50; transition: width 0.3s; }
+      .nfc-info { font-size: 11px; color: #aaa; margin-top: 4px; word-break: break-all; }
 
-      /* 右上：冒険の献立に戻るボタン */
-      #back-to-menu {
+      /* 右上：ナビゲーションボタン群 */
+      .top-nav {
           position: absolute; top: 20px; right: 20px;
+          display: flex; gap: 10px; pointer-events: auto;
+      }
+      .nav-btn {
           background: #3d2817; color: #ebd5b3; border: 1px solid #7c5c43;
           padding: 10px 15px; font-size: 14px; text-decoration: none;
-          border-radius: 5px; pointer-events: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.5);
-          font-family: 'Times New Roman', serif; transition: background 0.2s;
+          border-radius: 5px; cursor: pointer; font-family: 'Times New Roman', serif;
+          transition: background 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.5);
       }
-      #back-to-menu:hover { background: #5a3d2b; }
+      .nav-btn:hover { background: #5a3d2b; }
 
       /* 左下：大釜に材料を投入するボタン */
       #toss-btn {
-          position: absolute; bottom: 200px; left: 20px;
+          position: absolute; bottom: 40px; left: 20px;
           pointer-events: auto; background: #3d2817; color: #ebd5b3;
           border: 2px solid #4caf50; padding: 15px 20px; font-size: 16px; font-weight: bold;
           cursor: pointer; border-radius: 8px; font-family: 'Times New Roman', serif;
           transition: all 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.6);
           max-width: calc(100vw - 40px); box-sizing: border-box;
       }
-      #toss-btn:disabled { background: #1a120b; color: #555; border-color: #333; box-shadow: none; cursor: not-allowed; }
+      #toss-btn:disabled { background: #1a120b; color: #777; border-color: #444; box-shadow: none; cursor: not-allowed; }
 
-      /* システム起動＆NFC待機オーバーレイ */
-      #start-overlay {
+      /* オーバーレイ＆モーダル */
+      #start-overlay, .modal-overlay {
           position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
           background: rgba(0,0,0,0.85); z-index: 100;
           display: flex; justify-content: center; align-items: center; flex-direction: column;
@@ -63,6 +67,18 @@
           background: #4a86e8; color: white; border: none; padding: 20px 40px;
           font-size: 20px; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(74, 134, 232, 0.5);
       }
+
+      /* クレジットモーダル内領域 */
+      .modal-content {
+          background: #27140c; border: 2px solid #7c5c43; padding: 25px 30px;
+          border-radius: 10px; max-width: 500px; width: 85%; max-height: 80vh;
+          overflow-y: auto; color: #d4d4d4; box-shadow: 0 0 25px rgba(0,0,0,0.8);
+          pointer-events: auto;
+      }
+      .modal-content h2 { color: #ebd5b3; margin-top: 0; border-bottom: 1px solid #7c5c43; padding-bottom: 8px; }
+      .modal-content h3 { color: #4caf50; font-size: 16px; margin-top: 15px; margin-bottom: 5px; }
+      .modal-content ul { padding-left: 20px; margin: 5px 0; }
+      .modal-content li { font-size: 13px; margin-bottom: 4px; }
 
       /* アイテムポップアップ */
       .item-popup {
@@ -76,7 +92,7 @@
           animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
           cursor: pointer; pointer-events: auto; text-align: center;
       }
-      .item-popup h2 { margin: 0 0 10px 0; font-size: 26px; text-shadow: 1px 1px 2px #fff; }
+      .item-popup h2 { margin: 0 0 10px 0; font-size: 24px; text-shadow: 1px 1px 2px #fff; }
       .item-popup p { font-size: 15px; margin: 0; font-weight: bold; }
       .item-popup .tap-hint { font-size: 12px; color: #666; margin-top: 15px; animation: blink 1.5s infinite; }
 
@@ -85,10 +101,39 @@
     </style>
   </head>
   <body>
+    <!-- システム起動画面 -->
     <div id="start-overlay">
       <h2 style="color:white; margin-bottom: 20px;">魔女の工房へようこそ</h2>
       <p style="color:#aaa; margin-bottom: 30px; font-size: 14px;">※音声が鳴ります</p>
       <button onclick="initSystem()">システム起動 ＆ NFC待機</button>
+    </div>
+
+    <!-- クレジットモーダル -->
+    <div id="credits-modal" class="modal-overlay" style="display: none; z-index: 200;">
+      <div class="modal-content">
+        <h2>クレジット ＆ ライセンス</h2>
+        
+        <h3>使用ライブラリ</h3>
+        <ul>
+          <li><strong>Three.js (r128)</strong> - MIT License<br><span style="font-size: 11px; color: #aaa;">© 2010-2026 Three.js Authors</span></li>
+          <li><strong>OrbitControls.js</strong> - MIT License<br><span style="font-size: 11px; color: #aaa;">© Three.js Authors</span></li>
+        </ul>
+
+        <h3>オーディオ・効果音</h3>
+        <ul>
+          <li>Web Audio API Synthesizer (内蔵プログラム音源)</li>
+        </ul>
+
+        <h3>アプリケーション</h3>
+        <ul>
+          <li><strong>魔女の大釜 3Dガチャ</strong> (NFC連携対応版)</li>
+          <li>連携システム: 冒険の献立 (The Gamer's Feast)</li>
+        </ul>
+
+        <div style="text-align: center; margin-top: 25px;">
+          <button class="nav-btn" onclick="closeCredits()">閉じる</button>
+        </div>
+      </div>
     </div>
 
     <div id="canvas-container"></div>
@@ -105,24 +150,50 @@
           <span id="exp-display">0 / 100</span>
         </div>
         <div class="exp-bar-container"><div id="exp-bar"></div></div>
-        <div style="margin-top: 10px; font-size: 16px; color: #66cc66;">
-          蓄積時間(NFC):
+        <div style="margin-top: 10px; font-size: 15px; color: #66cc66;">
+          蓄積時間:
           <span id="catalyst-display">0</span>
           分
         </div>
+        <div id="card-title-display" class="nfc-info">カード未スキャン</div>
       </div>
 
-      <!-- 右上の戻るボタン -->
-      <a href="https://adol896.github.io/The-Gamer-s-Feast/" id="back-to-menu">冒険の献立に戻る</a>
+      <!-- 右上のボタン群 -->
+      <div class="top-nav">
+        <button class="nav-btn" onclick="openCredits()">クレジット</button>
+        <a href="https://adol896.github.io/The-Gamer-s-Feast/" class="nav-btn">冒険の献立に戻る</a>
+      </div>
 
       <!-- 左下の投入ボタン -->
-      <button id="toss-btn" onclick="tossCatalyst()" disabled>大釜に材料を投入する</button>
+      <button id="toss-btn" onclick="tossCatalyst()" disabled>カードをかざしてください</button>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
     <script>
+      /* =========================================
+         モーダル表示制御
+      ========================================= */
+      function openCredits() {
+          document.getElementById('credits-modal').style.display = 'flex';
+      }
+      function closeCredits() {
+          document.getElementById('credits-modal').style.display = 'none';
+      }
+
+      /* =========================================
+         日付ユーティリティ＆1日1回フラグ定数
+      ========================================= */
+      function getTodayString() {
+          const d = new Date();
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+      }
+      const GACHA_MARK = 'G'; // ガチャ実行時に日付スタンプの後ろに添える1文字
+
       /* =========================================
          Web Audio API (効果音)
       ========================================= */
@@ -153,13 +224,15 @@
       };
 
       /* =========================================
-         ゲームロジック (状態の引継ぎと同期)
+         ゲームロジック
       ========================================= */
       let playerLevel = parseInt(localStorage.getItem('zeldaPlayerLevel') || '1');
       let playerExp = parseInt(localStorage.getItem('zeldaPlayerExp') || '0');
       let expToNext = 100 * playerLevel;
       let catalystTime = 0;
-      let currentPayload = null; // 読み込んだNFCの全データを保持
+      let currentPayload = null; 
+      let loadedGameNames = [];
+      let hasDrawnToday = false; // 本日ガチャ実行済みフラグ
 
       const gachaPool = [
           { name: "名もなき剣士の錆びた剣", rarity: "N", desc: "小量の魔力を得た" },
@@ -173,11 +246,23 @@
           document.getElementById('exp-bar').style.width = `${Math.min(100, (playerExp / expToNext) * 100)}%`;
           document.getElementById('catalyst-display').innerText = catalystTime;
           
-          const tossBtn = document.getElementById('toss-btn');
-          if (catalystTime > 0) {
-              tossBtn.removeAttribute('disabled');
+          const titleDisplay = document.getElementById('card-title-display');
+          if (loadedGameNames.length > 0) {
+              titleDisplay.innerText = `検出: ${loadedGameNames.join(', ')}`;
           } else {
+              titleDisplay.innerText = "カード未スキャン";
+          }
+
+          const tossBtn = document.getElementById('toss-btn');
+          if (!currentPayload) {
+              tossBtn.innerText = "カードをかざしてください";
               tossBtn.setAttribute('disabled', 'true');
+          } else if (hasDrawnToday) {
+              tossBtn.innerText = "本日は投入済みです (1日1回)";
+              tossBtn.setAttribute('disabled', 'true');
+          } else {
+              tossBtn.innerText = "大釜に材料を投入する";
+              tossBtn.removeAttribute('disabled');
           }
       }
 
@@ -198,60 +283,68 @@
           updateUI();
       }
 
-      // 画面のボタンから大釜に投入したときの処理
+      // 大釜に材料を投入する処理
       async function tossCatalyst() {
-          if (isGachaRunning || catalystTime <= 0) return;
+          if (isGachaRunning || hasDrawnToday || !currentPayload) return;
           isGachaRunning = true;
 
           SE.toss();
-          let spentTime = catalystTime;
-          catalystTime = 0;
-          updateUI();
-
           const selectedItem = gachaPool[Math.floor(Math.random() * gachaPool.length)];
 
           setTimeout(async () => {
               showItemPopup(selectedItem);
 
-              let expGained = spentTime * 2;
+              let expGained = catalystTime > 0 ? catalystTime * 2 : 50;
               if(selectedItem.rarity === 'SR') expGained = Math.floor(expGained * 1.5);
               if(selectedItem.rarity === 'SSR') expGained = expGained * 2;
 
               addExp(expGained);
 
-              // データの書き戻し（「冒険の献立」の形式を維持しつつ、消費したゲーム時間を0にリセット）
+              // NFCカードの history に「今日の日付 + G」を記録して書き戻し (totalMinutesは維持)
               if ('NDEFReader' in window) {
                   try {
                       const ndefWriter = new NDEFReader();
-                      let writeData;
-                      if (currentPayload && currentPayload.games) {
-                          currentPayload.games.forEach(g => g.totalMinutes = 0);
-                          currentPayload.level = playerLevel;
-                          writeData = currentPayload;
-                      } else {
-                          writeData = { games: [], level: playerLevel };
+                      if (!currentPayload.history) currentPayload.history = [];
+                      
+                      const todayStr = getTodayString();
+                      const markEntry = `${todayStr}${GACHA_MARK}`;
+                      
+                      if (!currentPayload.history.includes(markEntry)) {
+                          currentPayload.history.push(markEntry);
                       }
+
                       await ndefWriter.write({
-                          records: [{ recordType: "text", data: JSON.stringify(writeData) }]
+                          records: [{ recordType: "text", data: JSON.stringify(currentPayload) }]
                       });
                   } catch (err) {
                       console.log("NFC書き込みエラー:", err);
                   }
               }
 
+              hasDrawnToday = true;
               isGachaRunning = false;
+              updateUI();
           }, 2000);
       }
 
-      // NFCから読み込んだデータをもとに反映
+      // NFCデータ解析・更新関数
       let isGachaRunning = false;
-      function processNfcData(achievedTime, payload) {
-          if (achievedTime <= 0) {
-              alert("このカードには有効な達成時間がありません。");
-              return;
-          }
+      function processNfcData(achievedTime, payload, gameTitles = []) {
+          currentPayload = payload || { games: [], history: [] };
           catalystTime = achievedTime;
-          currentPayload = payload;
+          loadedGameNames = gameTitles;
+
+          // history スタンプ配列から「今日の日付 + G」が存在するかチェック
+          const todayStr = getTodayString();
+          const historyArr = currentPayload.history || [];
+          
+          hasDrawnToday = historyArr.some(item => {
+              if (typeof item === 'string') {
+                  return item.includes(todayStr) && item.includes(GACHA_MARK);
+              }
+              return false;
+          });
+
           updateUI();
       }
 
@@ -265,8 +358,8 @@
                       SE.scan();
                       let readTime = 0;
                       let parsedPayload = null;
-                      
-                      // カード内のJSONデータから「冒険の献立」形式の達成時間（totalMinutesの合計）を正確に取得する
+                      let titles = [];
+
                       for (const record of event.message.records) {
                           if (record.recordType === "text") {
                               try {
@@ -277,24 +370,24 @@
                                   if (parsed.time !== undefined) {
                                       readTime = Number(parsed.time);
                                   } else if (parsed.games && Array.isArray(parsed.games)) {
-                                      // 各ゲームの累計時間の合計を算出
                                       readTime = parsed.games.reduce((sum, g) => sum + (g.totalMinutes || 0), 0);
+                                      titles = parsed.games.map(g => g.title || g.name || "ゲーム").filter(Boolean);
                                   }
                               } catch(e) {}
                           }
                       }
-                      processNfcData(readTime, parsedPayload);
+                      processNfcData(readTime, parsedPayload, titles);
                   };
               } catch (error) {
                   alert("NFCリーダー起動失敗。スマホでNFCをONにしてください。");
               }
           } else {
               document.getElementById('start-overlay').style.display = 'none';
-              // PC用裏技：右下クリックでNFC仮想タッチ（テスト用に60分として処理）
+              // デバッグ用仮想NFCタッチ（画面右下をタップ）
               window.addEventListener('click', (e) => {
                   if(e.clientX > window.innerWidth - 100 && e.clientY > window.innerHeight - 100) {
                       SE.scan();
-                      processNfcData(60, { games: [{ title: "テストゲーム", totalMinutes: 60 }] });
+                      processNfcData(60, { games: [{ title: "テストゲーム", totalMinutes: 60 }], history: [] }, ["テストゲーム"]);
                   }
               });
           }
