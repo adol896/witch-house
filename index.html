@@ -2,109 +2,247 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>魔女の大釜 3Dガチャ - 日別制限対応版</title>
     <style>
+      * {
+          box-sizing: border-box;
+      }
       body {
-          margin: 0; overflow: hidden; background-color: #1a120b;
-          color: #d4d4d4; font-family: 'Times New Roman', serif; user-select: none;
+          margin: 0;
+          padding: 0;
+          overflow: hidden;
+          background-color: #1a120b;
+          color: #d4d4d4;
+          font-family: 'Times New Roman', serif;
+          user-select: none;
+          width: 100vw;
+          height: 100vh;
+          height: 100dvh; /* スマホのアドレスバー対策 */
       }
       #canvas-container {
-          position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; cursor: grab;
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          z-index: 1;
+          cursor: grab;
       }
       #canvas-container:active { cursor: grabbing; }
 
-      /* UIレイアウト */
+      /* UIレイアウト全体 */
       #ui-layer {
-          position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-          z-index: 10; pointer-events: none; box-sizing: border-box;
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          z-index: 10;
+          pointer-events: none;
+          padding: 15px;
+          padding-bottom: calc(15px + env(safe-area-inset-bottom));
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
       }
 
-      /* 左上：ステータス */
+      /* ヘッダーコンテナ（PC・スマホでレイアウト切り替え） */
+      .header-container {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          width: 100%;
+          gap: 10px;
+      }
+
+      /* ステータスボックス */
       .header-status {
-          position: absolute; top: 20px; left: 20px;
-          background: rgba(20, 15, 10, 0.9); padding: 12px 15px;
-          border: 1px solid #5a3d2b; border-radius: 5px; width: 260px;
-          pointer-events: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+          background: rgba(20, 15, 10, 0.9);
+          padding: 12px 15px;
+          border: 1px solid #5a3d2b;
+          border-radius: 8px;
+          width: 260px;
+          max-width: 100%;
+          pointer-events: auto;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.5);
       }
       .exp-bar-container {
-          width: 100%; height: 8px; background: #222; margin-top: 5px; border-radius: 4px; overflow: hidden;
+          width: 100%;
+          height: 8px;
+          background: #222;
+          margin-top: 5px;
+          border-radius: 4px;
+          overflow: hidden;
       }
       #exp-bar { width: 0%; height: 100%; background: #4caf50; transition: width 0.3s; }
       .nfc-info { font-size: 11px; color: #aaa; margin-top: 4px; word-break: break-all; }
 
-      /* 右上：ナビゲーションボタン群 */
+      /* ナビゲーションボタン群 */
       .top-nav {
-          position: absolute; top: 20px; right: 20px;
-          display: flex; gap: 10px; pointer-events: auto;
+          display: flex;
+          gap: 8px;
+          pointer-events: auto;
+          flex-wrap: wrap;
+          justify-content: flex-end;
       }
       .nav-btn {
-          background: #3d2817; color: #ebd5b3; border: 1px solid #7c5c43;
-          padding: 10px 15px; font-size: 14px; text-decoration: none;
-          border-radius: 5px; cursor: pointer; font-family: 'Times New Roman', serif;
-          transition: background 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+          background: #3d2817;
+          color: #ebd5b3;
+          border: 1px solid #7c5c43;
+          padding: 8px 12px;
+          font-size: 13px;
+          text-decoration: none;
+          border-radius: 5px;
+          cursor: pointer;
+          font-family: 'Times New Roman', serif;
+          transition: background 0.2s;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+          white-space: nowrap;
       }
       .nav-btn:hover { background: #5a3d2b; }
 
-      /* 左下：大釜に材料を投入するボタン */
+      /* 大釜投入ボタン */
       #toss-btn {
-          position: absolute; bottom: 40px; left: 20px;
-          pointer-events: auto; background: #3d2817; color: #ebd5b3;
-          border: 2px solid #4caf50; padding: 15px 20px; font-size: 16px; font-weight: bold;
-          cursor: pointer; border-radius: 8px; font-family: 'Times New Roman', serif;
-          transition: all 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.6);
-          max-width: calc(100vw - 40px); box-sizing: border-box;
+          pointer-events: auto;
+          background: #3d2817;
+          color: #ebd5b3;
+          border: 2px solid #4caf50;
+          padding: 14px 20px;
+          font-size: 15px;
+          font-weight: bold;
+          cursor: pointer;
+          border-radius: 8px;
+          font-family: 'Times New Roman', serif;
+          transition: all 0.2s;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.6);
+          width: 100%;
+          max-width: 400px;
+          margin: 0 auto;
+          text-align: center;
+          line-height: 1.3;
       }
       #toss-btn:disabled { background: #1a120b; color: #777; border-color: #444; box-shadow: none; cursor: not-allowed; }
 
       /* オーバーレイ＆モーダル */
       #start-overlay, .modal-overlay {
-          position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-          background: rgba(0,0,0,0.85); z-index: 100;
-          display: flex; justify-content: center; align-items: center; flex-direction: column;
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          height: 100dvh;
+          background: rgba(0,0,0,0.85);
+          z-index: 100;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          flex-direction: column;
+          padding: 20px;
       }
       #start-overlay button {
-          background: #4a86e8; color: white; border: none; padding: 20px 40px;
-          font-size: 20px; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(74, 134, 232, 0.5);
+          background: #4a86e8;
+          color: white;
+          border: none;
+          padding: 16px 32px;
+          font-size: 18px;
+          border-radius: 10px;
+          cursor: pointer;
+          box-shadow: 0 0 15px rgba(74, 134, 232, 0.5);
+          max-width: 90%;
       }
 
       /* クレジットモーダル内領域 */
       .modal-content {
-          background: #27140c; border: 2px solid #7c5c43; padding: 25px 30px;
-          border-radius: 10px; max-width: 500px; width: 85%; max-height: 80vh;
-          overflow-y: auto; color: #d4d4d4; box-shadow: 0 0 25px rgba(0,0,0,0.8);
+          background: #27140c;
+          border: 2px solid #7c5c43;
+          padding: 20px 25px;
+          border-radius: 10px;
+          max-width: 500px;
+          width: 100%;
+          max-height: 80vh;
+          overflow-y: auto;
+          color: #d4d4d4;
+          box-shadow: 0 0 25px rgba(0,0,0,0.8);
           pointer-events: auto;
       }
-      .modal-content h2 { color: #ebd5b3; margin-top: 0; border-bottom: 1px solid #7c5c43; padding-bottom: 8px; }
-      .modal-content h3 { color: #4caf50; font-size: 16px; margin-top: 15px; margin-bottom: 5px; }
-      .modal-content ul { padding-left: 20px; margin: 5px 0; }
+      .modal-content h2 { color: #ebd5b3; margin-top: 0; border-bottom: 1px solid #7c5c43; padding-bottom: 8px; font-size: 20px; }
+      .modal-content h3 { color: #4caf50; font-size: 15px; margin-top: 15px; margin-bottom: 5px; }
+      .modal-content ul { padding-left: 18px; margin: 5px 0; }
       .modal-content li { font-size: 13px; margin-bottom: 4px; }
 
       /* アイテムポップアップ */
       .item-popup {
-          position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0);
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%) scale(0);
           z-index: 9999;
           background: radial-gradient(circle, #fffbd5, #b20a2c);
-          border: 4px solid #d4af37; border-radius: 50%;
-          width: 250px; height: 250px;
-          display: flex; flex-direction: column; justify-content: center; align-items: center;
-          color: #333; box-shadow: 0 0 50px rgba(255, 215, 0, 0.8);
+          border: 4px solid #d4af37;
+          border-radius: 50%;
+          width: 80vw;
+          height: 80vw;
+          max-width: 260px;
+          max-height: 260px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          color: #333;
+          box-shadow: 0 0 50px rgba(255, 215, 0, 0.8);
           animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-          cursor: pointer; pointer-events: auto; text-align: center;
+          cursor: pointer;
+          pointer-events: auto;
+          text-align: center;
+          padding: 15px;
       }
-      .item-popup h2 { margin: 0 0 10px 0; font-size: 24px; text-shadow: 1px 1px 2px #fff; }
-      .item-popup p { font-size: 15px; margin: 0; font-weight: bold; }
-      .item-popup .tap-hint { font-size: 12px; color: #666; margin-top: 15px; animation: blink 1.5s infinite; }
+      .item-popup h2 { margin: 0 0 8px 0; font-size: 20px; text-shadow: 1px 1px 2px #fff; }
+      .item-popup p { font-size: 14px; margin: 0; font-weight: bold; }
+      .item-popup .tap-hint { font-size: 11px; color: #666; margin-top: 12px; animation: blink 1.5s infinite; }
 
       @keyframes popIn { to { transform: translate(-50%, -50%) scale(1); } }
       @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+      /* =========================================
+         スマートフォン向け（画面幅 600px 以下）調整
+      ========================================= */
+      @media (max-width: 600px) {
+          #ui-layer {
+              padding: 10px;
+              padding-bottom: calc(15px + env(safe-area-inset-bottom));
+          }
+          .header-container {
+              flex-direction: column;
+              align-items: stretch;
+              gap: 8px;
+          }
+          .header-status {
+              width: 100%;
+              padding: 10px 12px;
+          }
+          .top-nav {
+              width: 100%;
+              justify-content: space-between;
+          }
+          .nav-btn {
+              flex: 1;
+              text-align: center;
+              padding: 8px 5px;
+              font-size: 12px;
+          }
+          #toss-btn {
+              font-size: 14px;
+              padding: 12px 15px;
+          }
+      }
     </style>
   </head>
   <body>
     <!-- システム起動画面 -->
     <div id="start-overlay">
-      <h2 style="color:white; margin-bottom: 20px;">魔女の工房へようこそ</h2>
-      <p style="color:#aaa; margin-bottom: 30px; font-size: 14px;">※音声が鳴ります</p>
+      <h2 style="color:white; margin-bottom: 15px; font-size: 22px; text-align: center;">魔女の工房へようこそ</h2>
+      <p style="color:#aaa; margin-bottom: 25px; font-size: 13px;">※音声が鳴ります</p>
       <button onclick="initSystem()">システム起動 ＆ NFC待機</button>
     </div>
 
@@ -130,8 +268,8 @@
           <li>連携システム: 冒険の献立 (The Gamer's Feast)</li>
         </ul>
 
-        <div style="text-align: center; margin-top: 25px;">
-          <button class="nav-btn" onclick="closeCredits()">閉じる</button>
+        <div style="text-align: center; margin-top: 20px;">
+          <button class="nav-btn" style="padding: 8px 25px;" onclick="closeCredits()">閉じる</button>
         </div>
       </div>
     </div>
@@ -139,32 +277,32 @@
     <div id="canvas-container"></div>
 
     <div id="ui-layer">
-      <!-- 左上のステータス -->
-      <div class="header-status">
-        <div style="font-size: 18px;">
-          魔女の工房
-          <span id="level-display">Lv.1</span>
+      <!-- 上部ヘッダー領域（ステータス ＋ ナビボタン） -->
+      <div class="header-container">
+        <!-- ステータス -->
+        <div class="header-status">
+          <div style="font-size: 16px; font-weight: bold;">
+            魔女の工房
+            <span id="level-display" style="color: #ebd5b3; margin-left: 5px;">Lv.1</span>
+          </div>
+          <div style="font-size: 12px; margin-top: 3px; color: #ccc;">
+            EXP: <span id="exp-display">0 / 100</span>
+          </div>
+          <div class="exp-bar-container"><div id="exp-bar"></div></div>
+          <div style="margin-top: 8px; font-size: 13px; color: #66cc66; font-weight: bold;">
+            蓄積時間: <span id="catalyst-display">0</span> 分
+          </div>
+          <div id="card-title-display" class="nfc-info">カード未スキャン</div>
         </div>
-        <div style="font-size: 13px; margin-top: 4px;">
-          EXP:
-          <span id="exp-display">0 / 100</span>
+
+        <!-- ナビボタン群 -->
+        <div class="top-nav">
+          <button class="nav-btn" onclick="openCredits()">クレジット</button>
+          <a href="https://adol896.github.io/The-Gamer-s-Feast/" class="nav-btn">冒険の献立に戻る</a>
         </div>
-        <div class="exp-bar-container"><div id="exp-bar"></div></div>
-        <div style="margin-top: 10px; font-size: 15px; color: #66cc66;">
-          蓄積時間:
-          <span id="catalyst-display">0</span>
-          分
-        </div>
-        <div id="card-title-display" class="nfc-info">カード未スキャン</div>
       </div>
 
-      <!-- 右上のボタン群 -->
-      <div class="top-nav">
-        <button class="nav-btn" onclick="openCredits()">クレジット</button>
-        <a href="https://adol896.github.io/The-Gamer-s-Feast/" class="nav-btn">冒険の献立に戻る</a>
-      </div>
-
-      <!-- 左下の投入ボタン -->
+      <!-- 下部投入ボタン -->
       <button id="toss-btn" onclick="tossCatalyst()" disabled>カードをかざしてください</button>
     </div>
 
@@ -192,7 +330,7 @@
           const day = String(d.getDate()).padStart(2, '0');
           return `${year}-${month}-${day}`;
       }
-      const GACHA_MARK = 'G'; // ガチャ実行時に日付スタンプの後ろに添えるマーク文字
+      const GACHA_MARK = 'G';
 
       /* =========================================
          Web Audio API (効果音)
@@ -232,7 +370,7 @@
       let catalystTime = 0;
       let currentPayload = null; 
       let loadedGameNames = [];
-      let hasDrawnToday = false; // 本日ガチャ実行済みフラグ
+      let hasDrawnToday = false;
       let isGachaRunning = false;
 
       const gachaPool = [
@@ -256,7 +394,7 @@
 
           const tossBtn = document.getElementById('toss-btn');
           if (isGachaRunning) {
-              tossBtn.innerText = "NFCに記録中...カードをタッチしてください";
+              tossBtn.innerText = "NFCに記録中...\nカードをタッチしてください";
               tossBtn.setAttribute('disabled', 'true');
           } else if (!currentPayload) {
               tossBtn.innerText = "カードをかざしてください";
@@ -287,13 +425,11 @@
           updateUI();
       }
 
-      // 【修正】NFCデータ解析・更新関数
       function processNfcData(achievedTime, payload, gameTitles = []) {
           currentPayload = payload || { games: [], history: [] };
           catalystTime = achievedTime;
           loadedGameNames = gameTitles;
 
-          // 1日1回制限の判定 (文字列 "YYYY-MM-DDG" や オブジェクトの双方に対応)
           const todayStr = getTodayString();
           const historyArr = Array.isArray(currentPayload.history) ? currentPayload.history : [];
           
@@ -309,7 +445,6 @@
           updateUI();
       }
 
-      // 【修正】大釜に材料を投入しNFCカードへ書き戻す処理
       async function tossCatalyst() {
           if (isGachaRunning || hasDrawnToday || !currentPayload) return;
           isGachaRunning = true;
@@ -318,7 +453,6 @@
           SE.toss();
           const selectedItem = gachaPool[Math.floor(Math.random() * gachaPool.length)];
 
-          // NFCカードへの書き込み処理（献立表のデータを保持したままhistoryを追加更新）
           if ('NDEFReader' in window) {
               try {
                   const ndefWriter = new NDEFReader();
@@ -333,7 +467,6 @@
                       currentPayload.history.push(markEntry);
                   }
 
-                  // 既存のJSON構造を保持したまま上書き保存
                   await ndefWriter.write({
                       records: [{
                           recordType: "text",
@@ -341,7 +474,7 @@
                       }]
                   });
               } catch (err) {
-                  console.warn("NFC書き込みエラー（かざし時間が短い等の可能性）:", err);
+                  console.warn("NFC書き込みエラー:", err);
               }
           }
 
@@ -360,7 +493,6 @@
           }, 1500);
       }
 
-      // 【修正】NFC読み取り初期化スクリプト
       async function initSystem() {
           audioCtx = new (window.AudioContext || window.webkitAudioContext)();
           if ('NDEFReader' in window) {
@@ -378,13 +510,11 @@
                       for (const record of event.message.records) {
                           if (record.recordType === "text") {
                               try {
-                                  // UTF-8で安全にテキスト変換
                                   const textDecoder = new TextDecoder(record.encoding || "utf-8");
                                   const text = textDecoder.decode(record.data);
                                   const parsed = JSON.parse(text);
                                   parsedPayload = parsed;
 
-                                  // 冒険者の献立表フォーマットからプレイ時間とゲーム名を抽出
                                   if (parsed.games && Array.isArray(parsed.games)) {
                                       readTime = parsed.games.reduce((sum, g) => {
                                           const mins = g.totalMinutes || g.minutes || g.playTime || 0;
@@ -406,7 +536,6 @@
               }
           } else {
               document.getElementById('start-overlay').style.display = 'none';
-              // デバッグ用仮想NFCタッチ（画面右下をタップ）
               window.addEventListener('click', (e) => {
                   if(e.clientX > window.innerWidth - 100 && e.clientY > window.innerHeight - 100) {
                       SE.scan();
@@ -427,6 +556,7 @@
 
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 高解像度ディスプレイ最適化
       renderer.shadowMap.enabled = true;
       document.getElementById('canvas-container').appendChild(renderer.domElement);
 
