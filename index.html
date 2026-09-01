@@ -24,7 +24,7 @@
       .header-status {
           position: absolute; top: 20px; left: 20px;
           background: rgba(20, 15, 10, 0.9); padding: 12px 15px;
-          border: 1px solid #5a3d2b; border-radius: 5px; width: 250px;
+          border: 1px solid #5a3d2b; border-radius: 5px; width: 260px;
           pointer-events: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
       }
       .exp-bar-container {
@@ -192,7 +192,7 @@
           const day = String(d.getDate()).padStart(2, '0');
           return `${year}-${month}-${day}`;
       }
-      const GACHA_MARK = 'G'; // ガチャ実行時に日付スタンプの後ろに添える1文字
+      const GACHA_MARK = 'G'; // ガチャ実行時に日付スタンプの後ろに添えるマーク文字
 
       /* =========================================
          Web Audio API (効果音)
@@ -233,6 +233,7 @@
       let currentPayload = null; 
       let loadedGameNames = [];
       let hasDrawnToday = false; // 本日ガチャ実行済みフラグ
+      let isGachaRunning = false;
 
       const gachaPool = [
           { name: "名もなき剣士の錆びた剣", rarity: "N", desc: "小量の魔力を得た" },
@@ -254,7 +255,10 @@
           }
 
           const tossBtn = document.getElementById('toss-btn');
-          if (!currentPayload) {
+          if (isGachaRunning) {
+              tossBtn.innerText = "NFCに記録中...カードをタッチしてください";
+              tossBtn.setAttribute('disabled', 'true');
+          } else if (!currentPayload) {
               tossBtn.innerText = "カードをかざしてください";
               tossBtn.setAttribute('disabled', 'true');
           } else if (hasDrawnToday) {
@@ -283,15 +287,65 @@
           updateUI();
       }
 
-      // 大釜に材料を投入する処理
+      // 【修正】NFCデータ解析・更新関数
+      function processNfcData(achievedTime, payload, gameTitles = []) {
+          currentPayload = payload || { games: [], history: [] };
+          catalystTime = achievedTime;
+          loadedGameNames = gameTitles;
+
+          // 1日1回制限の判定 (文字列 "YYYY-MM-DDG" や オブジェクトの双方に対応)
+          const todayStr = getTodayString();
+          const historyArr = Array.isArray(currentPayload.history) ? currentPayload.history : [];
+          
+          hasDrawnToday = historyArr.some(item => {
+              if (typeof item === 'string') {
+                  return item.includes(todayStr) && item.includes(GACHA_MARK);
+              } else if (typeof item === 'object' && item !== null) {
+                  return item.date === todayStr && item.type === 'GACHA';
+              }
+              return false;
+          });
+
+          updateUI();
+      }
+
+      // 【修正】大釜に材料を投入しNFCカードへ書き戻す処理
       async function tossCatalyst() {
           if (isGachaRunning || hasDrawnToday || !currentPayload) return;
           isGachaRunning = true;
+          updateUI();
 
           SE.toss();
           const selectedItem = gachaPool[Math.floor(Math.random() * gachaPool.length)];
 
-          setTimeout(async () => {
+          // NFCカードへの書き込み処理（献立表のデータを保持したままhistoryを追加更新）
+          if ('NDEFReader' in window) {
+              try {
+                  const ndefWriter = new NDEFReader();
+                  if (!currentPayload.history || !Array.isArray(currentPayload.history)) {
+                      currentPayload.history = [];
+                  }
+                  
+                  const todayStr = getTodayString();
+                  const markEntry = `${todayStr}${GACHA_MARK}`;
+                  
+                  if (!currentPayload.history.includes(markEntry)) {
+                      currentPayload.history.push(markEntry);
+                  }
+
+                  // 既存のJSON構造を保持したまま上書き保存
+                  await ndefWriter.write({
+                      records: [{
+                          recordType: "text",
+                          data: JSON.stringify(currentPayload)
+                      }]
+                  });
+              } catch (err) {
+                  console.warn("NFC書き込みエラー（かざし時間が短い等の可能性）:", err);
+              }
+          }
+
+          setTimeout(() => {
               showItemPopup(selectedItem);
 
               let expGained = catalystTime > 0 ? catalystTime * 2 : 50;
@@ -300,60 +354,21 @@
 
               addExp(expGained);
 
-              // NFCカードの history に「今日の日付 + G」を記録して書き戻し (totalMinutesは維持)
-              if ('NDEFReader' in window) {
-                  try {
-                      const ndefWriter = new NDEFReader();
-                      if (!currentPayload.history) currentPayload.history = [];
-                      
-                      const todayStr = getTodayString();
-                      const markEntry = `${todayStr}${GACHA_MARK}`;
-                      
-                      if (!currentPayload.history.includes(markEntry)) {
-                          currentPayload.history.push(markEntry);
-                      }
-
-                      await ndefWriter.write({
-                          records: [{ recordType: "text", data: JSON.stringify(currentPayload) }]
-                      });
-                  } catch (err) {
-                      console.log("NFC書き込みエラー:", err);
-                  }
-              }
-
               hasDrawnToday = true;
               isGachaRunning = false;
               updateUI();
-          }, 2000);
+          }, 1500);
       }
 
-      // NFCデータ解析・更新関数
-      let isGachaRunning = false;
-      function processNfcData(achievedTime, payload, gameTitles = []) {
-          currentPayload = payload || { games: [], history: [] };
-          catalystTime = achievedTime;
-          loadedGameNames = gameTitles;
-
-          // history スタンプ配列から「今日の日付 + G」が存在するかチェック
-          const todayStr = getTodayString();
-          const historyArr = currentPayload.history || [];
-          
-          hasDrawnToday = historyArr.some(item => {
-              if (typeof item === 'string') {
-                  return item.includes(todayStr) && item.includes(GACHA_MARK);
-              }
-              return false;
-          });
-
-          updateUI();
-      }
-
+      // 【修正】NFC読み取り初期化スクリプト
       async function initSystem() {
           audioCtx = new (window.AudioContext || window.webkitAudioContext)();
           if ('NDEFReader' in window) {
               try {
-                  const ndef = new NDEFReader(); await ndef.scan();
+                  const ndef = new NDEFReader();
+                  await ndef.scan();
                   document.getElementById('start-overlay').style.display = 'none';
+
                   ndef.onreading = event => {
                       SE.scan();
                       let readTime = 0;
@@ -363,23 +378,31 @@
                       for (const record of event.message.records) {
                           if (record.recordType === "text") {
                               try {
-                                  const textDec = new TextDecoder().decode(record.data);
-                                  const parsed = JSON.parse(textDec);
+                                  // UTF-8で安全にテキスト変換
+                                  const textDecoder = new TextDecoder(record.encoding || "utf-8");
+                                  const text = textDecoder.decode(record.data);
+                                  const parsed = JSON.parse(text);
                                   parsedPayload = parsed;
 
-                                  if (parsed.time !== undefined) {
+                                  // 冒険者の献立表フォーマットからプレイ時間とゲーム名を抽出
+                                  if (parsed.games && Array.isArray(parsed.games)) {
+                                      readTime = parsed.games.reduce((sum, g) => {
+                                          const mins = g.totalMinutes || g.minutes || g.playTime || 0;
+                                          return sum + Number(mins);
+                                      }, 0);
+                                      titles = parsed.games.map(g => g.title || g.name || "不明なゲーム").filter(Boolean);
+                                  } else if (parsed.time !== undefined) {
                                       readTime = Number(parsed.time);
-                                  } else if (parsed.games && Array.isArray(parsed.games)) {
-                                      readTime = parsed.games.reduce((sum, g) => sum + (g.totalMinutes || 0), 0);
-                                      titles = parsed.games.map(g => g.title || g.name || "ゲーム").filter(Boolean);
                                   }
-                              } catch(e) {}
+                              } catch(e) {
+                                  console.error("NFC JSON Parse Error:", e);
+                              }
                           }
                       }
                       processNfcData(readTime, parsedPayload, titles);
                   };
               } catch (error) {
-                  alert("NFCリーダー起動失敗。スマホでNFCをONにしてください。");
+                  alert("NFCリーダー起動失敗。スマホでNFC機能をONにしてください。");
               }
           } else {
               document.getElementById('start-overlay').style.display = 'none';
